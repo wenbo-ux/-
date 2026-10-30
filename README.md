@@ -11,8 +11,7 @@ photo-wall/
 │  ├─ admin.html                    管理后台
 │  └─ assets/{style.css,app.js,admin.js,config.js}
 ├─ supabase/
-│  ├─ setup-ready.sql                ← 已含真实哈希，直接贴进 SQL Editor
-│  ├─ migrations/20261030000000_init.sql   建表模板（占位哈希）
+│  ├─ migrations/20261030000000_init.sql   ← 表结构 + bucket + 初始密钥哈希（自动执行）
 │  ├─ functions/api/index.ts               Edge Function（所有读写都走它）
 │  └─ config.toml
 ├─ tools/
@@ -54,18 +53,20 @@ Build command 留空、Publish directory 填 `site`（`netlify.toml` 里已写�
 
 ### 3. Supabase 建表（一次性）
 
-> 仓库里已经放好了带**真实哈希**的 `supabase/setup-ready.sql`，直接打开它、
-> 整段复制到 SQL Editor 执行即可，不用再跑脚本。
-> 对应的明文密钥和 `AREA_PEPPER` 不在仓库里（在本地备份文件 / 聊天里），
-> 因为 pepper + 哈希放在一起就等于把密钥公开了。
+> 建项目时**可以直接勾选 GitHub 集成**：`supabase/migrations/20261030000000_init.sql`
+> 里已经是真实哈希，第一同步就会把表、私有 bucket、两把区域密钥和管理员密钥都建好。
+> 如果没绑集成，就在 SQL Editor 里整段运行这个文件，效果完全一样。
+> 明文密钥和 `AREA_PEPPER` 不在仓库里（在本地备份 / 聊天里），
+> 因为 pepper 和哈希放一起等于把密钥公开了。
 
-```sh
-sh tools/make-sql.sh "七年级密钥" "小学密钥" "0124"
-#   参数3 = 管理员密钥（默认 0124），参数4 = pepper（不填随机生成）
+建完之后在 SQL Editor 里跑一句自检：
+
+```sql
+select 'area_keys' t, area, length(key_hash) len from public.area_keys
+union all select 'admin_auth','admin', length(key_hash) from public.admin_auth;
 ```
 
-把生成的 `supabase/setup-ready.sql` 整段贴进 Supabase → SQL Editor → Run。
-脚本结尾的 `select` 会自检：`hash_len` 得是 64。
+三行的 `len` 必须都是 **64**。要是只有 21（`REPLACE_ME_ADMIN_HASH` 那么长），说明跑的是旧模板。
 
 ### 4. Supabase 函数
 

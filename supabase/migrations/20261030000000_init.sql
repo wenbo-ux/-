@@ -1,6 +1,8 @@
 -- ============================================================
--- 我们的相册 · Supabase 初始化脚本
--- 在 Supabase 控制台 → SQL Editor 里整段运行一次即可。
+-- 我们的相册 · Supabase 初始化脚本（表结构 + 私有 bucket + 初始密钥哈希）
+-- ============================================================
+-- 这份文件会被 Supabase 的 GitHub 集成自动执行（建项目的第一次同步）。
+-- 里面的密钥哈希是最终值；要改密钥请用 admin.html 后台，或 tools/make-sql.sh。
 -- ============================================================
 
 -- 1) 区域密钥表（只存 HMAC 哈希，永远不存明文密钥）
@@ -39,15 +41,12 @@ on conflict (id) do update
       file_size_limit = 26214400,
       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
 
--- 5) 写入两个区域的密钥哈希
---    先在本地算哈希： sh tools/hash-key.sh "你的密钥"
---    然后把下面的 REPLACE_ME_xxx 换成算出来的 64 位十六进制串。
---    模板里用 do nothing：重复执行不会覆盖已生效的密钥。
---    （tools/make-sql.sh 生成的 setup-ready.sql 会改成 do update，用来强制写新密钥）
+-- 5) 写入两个区域的密钥哈希（HMAC-SHA256，pepper 只存在函数 Secrets 里）
+--    明文不写在仓库里（存在本地备份文件）。改密钥不用动这个文件：进 admin.html 后台改。
 insert into public.area_keys (area, key_hash) values
-  ('grade7',  'REPLACE_ME_GRADE7_HASH'),
-  ('primary', 'REPLACE_ME_PRIMARY_HASH')
-on conflict (area) do nothing;
+  ('grade7',  'e05085508801af269d505f2fab46abd117e41828dd4b2f29783755f569e20a21'),
+  ('primary', 'e8547428a38b9b7c57b2793381eef3429289ff5012a26e9b63c7668b6c47e6c5')
+on conflict (area) do update set key_hash = excluded.key_hash, updated_at = now();
 
 -- 6) 换密钥 / 首次写入（把哈希换成 sh tools/hash-key.sh "新密钥" 的结果，旧密钥立即失效）
 -- update public.area_keys set key_hash = '新的哈希', updated_at = now() where area = 'grade7';
@@ -69,5 +68,5 @@ create table if not exists public.admin_auth (
 alter table public.admin_auth enable row level security;
 -- 同样不建 policy：只有 Edge Function 的 service_role 能读
 
-insert into public.admin_auth (id, key_hash) values (1, 'REPLACE_ME_ADMIN_HASH')
-on conflict (id) do nothing;
+insert into public.admin_auth (id, key_hash) values (1, '22e6cf4f7323f2e19f9de6d2b8ac673b2eb500b37abe18a0397c74e467c1673f')
+on conflict (id) do update set key_hash = excluded.key_hash, updated_at = now();
