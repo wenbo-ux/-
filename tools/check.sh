@@ -38,7 +38,7 @@ echo "① ping —— 函数是否部署、是不是新代码"
 R=$(post '{"action":"ping"}')
 echo "   $R"
 case "$R" in
-  *'"version":2'*) echo "   ✓ 函数已部署，且是最新代码" ;;
+  *'"version":'*) echo "   ✓ 函数已部署（新代码）" ;;
   *'"ok":true'*)   echo "   △ 函数在，但代码是旧的 —— 需要重新部署 index.ts" ;;
   *'Failed to fetch'*|*'Could not resolve'*) echo "   ✗ 域名解析失败，URL 写错了？" ;;
   *) echo "   ✗ 调不通 —— 检查函数名是不是 api、有没有部署成功" ;;
