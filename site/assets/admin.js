@@ -71,9 +71,14 @@
   function api(action, payload) {
     var body = { action: action, adminKey: state.key };
     for (var k in payload || {}) body[k] = payload[k];
+    var headers = { 'Content-Type': 'application/json', 'x-admin-key': state.key };
+    if (CFG.SUPABASE_ANON_KEY) {
+      headers.apikey = CFG.SUPABASE_ANON_KEY;
+      headers.Authorization = 'Bearer ' + CFG.SUPABASE_ANON_KEY;
+    }
     return fetch(FN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': state.key },
+      headers: headers,
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.text().then(function (t) {
