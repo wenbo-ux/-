@@ -3,18 +3,32 @@
 # 用法: sh tools/check.sh https://<项目ref>.supabase.co [管理员密钥]
 BASE="$1"
 ADMIN="$2"
+CFG="$(dirname "$0")/../site/assets/config.js"
+if [ -z "$BASE" ] && [ -f "$CFG" ]; then
+  BASE=$(sed -n "s/.*SUPABASE_URL: *'\([^']*\)'.*/\1/p" "$CFG")
+fi
 if [ -z "$BASE" ]; then
   echo "用法: sh tools/check.sh https://xxx.supabase.co [管理员密钥]"
   exit 1
 fi
 BASE=$(printf '%s' "$BASE" | sed 's:/*$::')
+KEY=""
+if [ -f "$CFG" ]; then
+  KEY=$(sed -n "s/.*SUPABASE_ANON_KEY: *'\([^']*\)'.*/\1/p" "$CFG")
+fi
 URL="$BASE/functions/v1/api"
 
 post() {
-  curl -sS --max-time 25 -X POST "$URL" \
-    -H 'content-type: application/json' \
-    -H 'apikey: none' \
-    -d "$1" 2>&1
+  if [ -n "$KEY" ]; then
+    curl -sS --max-time 25 -X POST "$URL" \
+      -H 'content-type: application/json' \
+      -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+      -d "$1" 2>&1
+  else
+    curl -sS --max-time 25 -X POST "$URL" \
+      -H 'content-type: application/json' \
+      -d "$1" 2>&1
+  fi
 }
 
 echo "目标: $URL"
