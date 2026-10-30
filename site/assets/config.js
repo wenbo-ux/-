@@ -6,7 +6,7 @@
  * 注意：这里只能放 anon key，绝对不要把 service_role key 写进前端。
  * ============================================================ */
 window.APP_CONFIG = {
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-  SUPABASE_ANON_KEY: '',
+  SUPABASE_URL: 'https://hyeaoygistohczuakdfi.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_Y0aCejSg2nWlHxquloaeoA_xtWS8x2l',
   FUNCTION_PATH: '/functions/v1/api'
 };
