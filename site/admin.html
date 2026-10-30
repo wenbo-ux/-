@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1170">
+<meta name="robots" content="noindex,nofollow">
+<title>管理后台 · 我们的相册</title>
+<link rel="stylesheet" href="assets/style.css?v=9">
+</head>
+<body>
+<div class="bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">⚙</div>
+    <div>
+      <h1>管理后台</h1>
+      <p class="sub">仅管理员可见</p>
+    </div>
+  </div>
+  <button id="logoutBtn" class="ghost" hidden>退出</button>
+</header>
+
+<main>
+  <!-- 登录 -->
+  <section id="loginView" class="card lock-card" hidden>
+    <div class="lock-ico">🗝️</div>
+    <h2>管理员登录</h2>
+    <p class="hint">输入管理员密钥</p>
+    <form id="adminForm" autocomplete="off">
+      <input id="adminKey" type="password" placeholder="管理员密钥" autocomplete="current-password" required>
+      <button type="submit" class="primary" id="loginBtn">进入后台</button>
+    </form>
+    <p class="tiny" id="loginDebug"></p>
+    <button type="button" class="ghost" id="diagBtn" style="margin-top:10px">检查连接</button>
+  </section>
+
+  <!-- 面板 -->
+  <section id="panelView" hidden>
+    <div class="stats" id="stats"></div>
+
+    <div class="seg" id="seg">
+      <button data-area="" class="on">全部</button>
+      <button data-area="grade7">七年级</button>
+      <button data-area="primary">小学</button>
+    </div>
+
+    <div id="admGrid" class="adm-grid"></div>
+    <div id="admEmpty" class="empty" hidden><span>🗂️</span><p>这个区域还没有照片</p></div>
+
+    <section class="card sect">
+      <h3>更换区域密钥</h3>
+      <form class="krow" data-set="grade7">
+        <input type="text" placeholder="七年级新密钥" autocomplete="off" minlength="4" maxlength="64" required>
+        <button type="submit" class="solid">保存</button>
+      </form>
+      <form class="krow" data-set="primary">
+        <input type="text" placeholder="小学新密钥" autocomplete="off" minlength="4" maxlength="64" required>
+        <button type="submit" class="solid">保存</button>
+      </form>
+      <p class="tiny">保存后旧密钥立刻失效，大家下次进入要输新的。</p>
+    </section>
+
+    <section class="card sect">
+      <h3>更换管理员密钥</h3>
+      <form class="krow" id="adminKeyForm">
+        <input type="text" id="newAdminKey" placeholder="新的管理员密钥" autocomplete="off" minlength="4" maxlength="64" required>
+        <button type="submit" class="solid">保存</button>
+      </form>
+      <p class="tiny">妥善保管。忘了就只能去 Supabase 里改 admin_auth 表。</p>
+    </section>
+
+    <section class="card sect danger">
+      <h3>危险操作</h3>
+      <form class="krow" data-clear="grade7">
+        <input type="text" placeholder="输入「七年级」确认清空" autocomplete="off" required>
+        <button type="submit">清空</button>
+      </form>
+      <form class="krow" data-clear="primary">
+        <input type="text" placeholder="输入「小学」确认清空" autocomplete="off" required>
+        <button type="submit">清空</button>
+      </form>
+      <p class="tiny">会删掉该区域所有照片记录和原图，无法恢复。</p>
+    </section>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="assets/config.js?v=9"></script>
+<script src="assets/admin.js?v=9"></script>
+</body>
+</html>

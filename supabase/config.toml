@@ -1,0 +1,6 @@
+# 只放 Functions 相关配置；用 Dashboard 部署时不需要这个文件
+project_id = "photo-wall"
+
+[functions.api]
+# 密钥校验在函数内部做，所以不需要 Supabase JWT
+verify_jwt = false

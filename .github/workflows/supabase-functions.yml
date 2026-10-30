@@ -1,0 +1,40 @@
+name: Deploy Supabase Edge Function
+
+# Supabase 官方没有「连 GitHub 仓库自动部署函数」的功能，
+# 所以用这个 workflow 在 push 时调用 supabase CLI 部署。
+# 需要在仓库 Settings → Secrets and variables → Actions 里配置：
+#   SUPABASE_ACCESS_TOKEN  (Supabase 账号 → Account → Access Tokens 生成)
+#   SUPABASE_PROJECT_ID    (项目 ref，形如 abcdefghijklmnop)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - ".github/workflows/supabase-functions.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          supabase functions deploy api \
+            --project-ref "$SUPABASE_PROJECT_ID" \
+            --no-verify-jwt
+      - name: Ping 自检
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          sleep 5
+          curl -sS -X POST "https://$SUPABASE_PROJECT_ID.supabase.co/functions/v1/api" \
+            -H 'content-type: application/json' -d '{"action":"ping"}'
