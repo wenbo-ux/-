@@ -3,4 +3,3 @@ node_modules/
 .env
 .env.local
 supabase/.temp/
-supabase/setup-ready.sql

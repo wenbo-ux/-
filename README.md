@@ -11,7 +11,8 @@ photo-wall/
 │  ├─ admin.html                    管理后台
 │  └─ assets/{style.css,app.js,admin.js,config.js}
 ├─ supabase/
-│  ├─ migrations/20261030000000_init.sql   建表 + RLS + 私有 bucket
+│  ├─ setup-ready.sql                ← 已含真实哈希，直接贴进 SQL Editor
+│  ├─ migrations/20261030000000_init.sql   建表模板（占位哈希）
 │  ├─ functions/api/index.ts               Edge Function（所有读写都走它）
 │  └─ config.toml
 ├─ tools/
@@ -52,6 +53,11 @@ Build command 留空、Publish directory 填 `site`（`netlify.toml` 里已写�
 以后 `git push` 就自动发布前端。
 
 ### 3. Supabase 建表（一次性）
+
+> 仓库里已经放好了带**真实哈希**的 `supabase/setup-ready.sql`，直接打开它、
+> 整段复制到 SQL Editor 执行即可，不用再跑脚本。
+> 对应的明文密钥和 `AREA_PEPPER` 不在仓库里（在本地备份文件 / 聊天里），
+> 因为 pepper + 哈希放在一起就等于把密钥公开了。
 
 ```sh
 sh tools/make-sql.sh "七年级密钥" "小学密钥" "0124"
