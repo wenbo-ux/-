@@ -20,10 +20,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 检查是否已配置 secret
+        id: guard
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$PID" ]; then
+            echo "::notice title=跳过部署::还没配置 SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_ID，本次不部署函数。"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: supabase/setup-cli@v1
+        if: steps.guard.outputs.ready == 'true'
         with:
           version: latest
       - name: Deploy api
+        if: steps.guard.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
@@ -32,6 +47,7 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_ID" \
             --no-verify-jwt
       - name: Ping 自检
+        if: steps.guard.outputs.ready == 'true'
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
