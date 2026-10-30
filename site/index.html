@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#1a1170">
 <title>我们的相册 · 一起长大的日子</title>
 <meta name="description" content="上传和浏览大家的合照：七年级区域 / 小学区域，各自独立访问密钥。">
-<link rel="stylesheet" href="assets/style.css?v=12">
+<link rel="stylesheet" href="assets/style.css?v=13">
 </head>
 <body>
 <div class="bg" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
@@ -42,25 +42,39 @@
   <!-- 已解锁 -->
   <section id="areaView" hidden>
     <div class="card upload-card">
+      <div class="seg mode" id="modeSeg">
+        <button type="button" data-mode="photo" class="on">照片</button>
+        <button type="button" data-mode="text">文字</button>
+      </div>
+
       <div class="field">
         <label for="nameInput">你的名字</label>
         <input id="nameInput" type="text" maxlength="16" placeholder="例如：小雅" autocomplete="nickname">
       </div>
-      <div class="field">
-        <label for="captionInput">写一句话 <span class="opt">（可选）</span></label>
-        <input id="captionInput" type="text" maxlength="60" placeholder="那天我们笑得好开心">
+
+      <div id="photoPane">
+        <div class="field" id="captionField">
+          <label for="captionInput">写一句话 <span class="opt">（可选）</span></label>
+          <input id="captionInput" type="text" maxlength="60" placeholder="那天我们笑得好开心">
+        </div>
+
+        <button id="pickBtn" class="drop" type="button">
+          <div class="drop-inner">
+            <span class="drop-ico">＋</span>
+            <strong>选择 / 拖入合照</strong>
+            <small>支持多张，自动压缩，单张 ≤ 20MB</small>
+          </div>
+        </button>
+        <div id="queue" class="queue"></div>
+        <div id="progress" class="progress" hidden><i></i></div>
+        <button id="uploadBtn" class="primary wide" hidden>上传</button>
       </div>
 
-      <button id="pickBtn" class="drop" type="button">
-        <div class="drop-inner">
-          <span class="drop-ico">＋</span>
-          <strong>选择 / 拖入合照</strong>
-          <small>支持多张，自动压缩，单张 ≤ 20MB</small>
-        </div>
-      </button>
-      <div id="queue" class="queue"></div>
-      <div id="progress" class="progress" hidden><i></i></div>
-      <button id="uploadBtn" class="primary wide" hidden>上传</button>
+      <div id="textPane" hidden>
+        <textarea id="textInput" maxlength="500" rows="4" placeholder="想说的话、那天的事、想对大家说的……"></textarea>
+        <div class="counter"><span id="textCount">0</span>/500</div>
+        <button id="postTextBtn" class="primary wide">发布</button>
+      </div>
     </div>
 
     <div class="gallery-head">
@@ -83,10 +97,24 @@
   <button class="lb-del" id="lbDel">删除这张</button>
 </div>
 
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <h3 id="sheetTitle">回复</h3>
+      <button id="sheetClose" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div id="sheetList" class="sheet-list"></div>
+    <form id="sheetForm" class="sheet-form" autocomplete="off">
+      <input id="sheetInput" type="text" maxlength="200" placeholder="写一条回复…" required>
+      <button type="submit" class="primary">发送</button>
+    </form>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 <input id="fileInput" type="file" accept="image/*" multiple hidden>
 
-<script src="assets/config.js?v=12"></script>
-<script src="assets/app.js?v=12"></script>
+<script src="assets/config.js?v=13"></script>
+<script src="assets/app.js?v=13"></script>
 </body>
 </html>

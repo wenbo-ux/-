@@ -11,9 +11,11 @@ const CORS: Record<string, string> = {
 
 const AREAS: Record<string, string> = { grade7: '七年级', primary: '小学' };
 const BUCKET = Deno.env.get('PHOTO_BUCKET') ?? 'photos';
-const SIGNED_TTL = 60 * 60 * 6;          // 图片签名链接有效期（秒）
+const SIGNED_TTL = 60 * 60 * 6;
 const MAX_AUTHOR = 16;
 const MAX_CAPTION = 60;
+const MAX_BODY = 500;
+const MAX_COMMENT = 200;
 const MIN_KEY_LEN = 4;
 const MAX_KEY_LEN = 64;
 
@@ -33,7 +35,6 @@ function json(body: unknown, status = 200) {
 }
 const fail = (msg: string, status = 400) => json({ ok: false, error: msg }, status);
 
-/* HMAC-SHA256(pepper, value) → hex，与 tools/hash-key.sh 保持一致 */
 async function hmacHex(value: string) {
   const enc = new TextEncoder();
   const ck = await crypto.subtle.importKey(
@@ -82,7 +83,7 @@ async function authorizeAdmin(key: string) {
   return safeEqual(data.key_hash, await hmacHex(key));
 }
 
-/* ---------------- Storage / 数据 ---------------- */
+/* ---------------- 数据 ---------------- */
 async function areaStats() {
   const stats: Record<string, number> = {};
   for (const a of Object.keys(AREAS)) {
@@ -93,49 +94,87 @@ async function areaStats() {
   return stats;
 }
 
-async function withUrls(rows: Row[]) {
+const PHOTO_COLS = 'id,area,storage_path,author,caption,body,kind,width,height,created_at';
+
+async function signedMap(paths: string[]) {
   const urls = new Map<string, string>();
-  if (rows.length) {
-    const { data: signed } = await db.storage
-      .from(BUCKET)
-      .createSignedUrls(rows.map((r) => String(r.storage_path)), SIGNED_TTL);
-    for (const s of signed ?? []) {
-      if (s?.path && s?.signedUrl) urls.set(s.path, s.signedUrl);
-    }
+  if (!paths.length) return urls;
+  const { data: signed } = await db.storage
+    .from(BUCKET).createSignedUrls(paths, SIGNED_TTL);
+  for (const s of signed ?? []) {
+    if (s?.path && s?.signedUrl) urls.set(s.path, s.signedUrl);
   }
+  return urls;
+}
+
+async function withUrls(rows: Row[]) {
+  const paths = rows
+    .filter((r) => r.kind !== 'text' && r.storage_path)
+    .map((r) => String(r.storage_path));
+  const urls = await signedMap(paths);
   return rows
-    .filter((r) => urls.has(String(r.storage_path)))
     .map((r) => ({
       id: r.id,
       area: r.area,
       areaName: AREAS[String(r.area)] ?? '',
+      kind: r.kind ?? 'photo',
       author: r.author,
       caption: r.caption,
+      body: r.body,
       width: r.width,
       height: r.height,
       created_at: r.created_at,
-      url: urls.get(String(r.storage_path)),
-    }));
+      url: r.storage_path ? urls.get(String(r.storage_path)) ?? null : null,
+    }))
+    // 图片贴如果签名失败就跳过（文字贴永远保留）
+    .filter((p) => p.kind === 'text' || p.url);
 }
 
-const PHOTO_COLS = 'id,area,storage_path,author,caption,width,height,created_at';
+/* 批量统计点赞 / 回复数，以及"我赞过没有" */
+async function socialStats(ids: string[], clientId: string) {
+  const likes = new Map<string, number>();
+  const comments = new Map<string, number>();
+  const mine = new Set<string>();
+  if (!ids.length) return { likes, comments, mine };
 
-async function removeObjects(paths: string[]) {
-  for (let i = 0; i < paths.length; i += 100) {
-    await db.storage.from(BUCKET).remove(paths.slice(i, i + 100));
+  const [likeRes, cmtRes, mineRes] = await Promise.all([
+    db.from('likes').select('post_id').in('post_id', ids).limit(5000),
+    db.from('comments').select('post_id').in('post_id', ids).limit(5000),
+    clientId
+      ? db.from('likes').select('post_id').in('post_id', ids).eq('client_id', clientId).limit(5000)
+      : Promise.resolve({ data: [] as Row[] }),
+  ]);
+
+  for (const r of (likeRes.data ?? []) as Row[]) {
+    const k = String(r.post_id);
+    likes.set(k, (likes.get(k) ?? 0) + 1);
   }
+  for (const r of (cmtRes.data ?? []) as Row[]) {
+    const k = String(r.post_id);
+    comments.set(k, (comments.get(k) ?? 0) + 1);
+  }
+  for (const r of (mineRes.data ?? []) as Row[]) mine.add(String(r.post_id));
+  return { likes, comments, mine };
 }
 
+const uuidOk = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
 const intOrNull = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 && n < 20000 ? Math.round(n) : null;
 };
+const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n);
 
 function checkNewKey(v: unknown) {
   const s = String(v ?? '').trim();
   if (s.length < MIN_KEY_LEN) return { error: `新密钥至少 ${MIN_KEY_LEN} 位` };
   if (s.length > MAX_KEY_LEN) return { error: `新密钥最长 ${MAX_KEY_LEN} 位` };
   return { key: s };
+}
+
+async function removeObjects(paths: string[]) {
+  for (let i = 0; i < paths.length; i += 100) {
+    await db.storage.from(BUCKET).remove(paths.slice(i, i + 100));
+  }
 }
 
 /* ---------------- 主入口 ---------------- */
@@ -148,9 +187,10 @@ Deno.serve(async (req: Request) => {
 
   const action = String(body.action ?? '');
   const area = String(body.area ?? '');
+  const clientId = clip(body.clientId, 64);
   const ip = (req.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
 
-  /* ============ 管理员接口 ============ */
+  /* ============ 管理员 ============ */
   if (action.startsWith('admin-')) {
     const adminKey = req.headers.get('x-admin-key') ?? String(body.adminKey ?? '');
 
@@ -172,18 +212,28 @@ Deno.serve(async (req: Request) => {
         if (AREAS[area]) q = q.eq('area', area);
         const { data, error } = await q;
         if (error) return fail(error.message, 500);
-        return json({ ok: true, photos: await withUrls(data ?? []), stats: await areaStats() });
+        const rows = data ?? [];
+        const st = await socialStats(rows.map((r) => String(r.id)), '');
+        return json({
+          ok: true,
+          photos: (await withUrls(rows)).map((p) => ({
+            ...p,
+            likes: st.likes.get(String(p.id)) ?? 0,
+            comments: st.comments.get(String(p.id)) ?? 0,
+          })),
+          stats: await areaStats(),
+        });
       }
 
       case 'admin-delete': {
         const id = String(body.id ?? '');
-        if (!/^[0-9a-f-]{36}$/i.test(id)) return fail('参数错误');
+        if (!uuidOk(id)) return fail('参数错误');
         const { data, error } = await db
           .from('photos').delete().eq('id', id).select('storage_path');
         if (error) return fail('删除失败：' + error.message, 500);
         const row = (data ?? [])[0];
-        if (!row) return fail('这张照片已经不在了（可能已被删除）', 404);
-        await db.storage.from(BUCKET).remove([row.storage_path]);
+        if (!row) return fail('这条已经不在了（可能已被删除）', 404);
+        if (row.storage_path) await db.storage.from(BUCKET).remove([String(row.storage_path)]);
         return json({ ok: true, stats: await areaStats() });
       }
 
@@ -199,7 +249,9 @@ Deno.serve(async (req: Request) => {
         if (!rows.length) return json({ ok: true, deleted: 0, stats: await areaStats() });
         const { error: delErr } = await db.from('photos').delete().eq('area', area);
         if (delErr) return fail(delErr.message, 500);
-        await removeObjects(rows.map((r) => r.storage_path));
+        await removeObjects(
+          rows.map((r) => r.storage_path).filter(Boolean).map((p) => String(p)),
+        );
         return json({ ok: true, deleted: rows.length, stats: await areaStats() });
       }
 
@@ -208,9 +260,7 @@ Deno.serve(async (req: Request) => {
         const c = checkNewKey(body.newKey);
         if (c.error) return fail(c.error);
         const { error } = await db.from('area_keys').upsert({
-          area,
-          key_hash: await hmacHex(c.key!),
-          updated_at: new Date().toISOString(),
+          area, key_hash: await hmacHex(c.key!), updated_at: new Date().toISOString(),
         });
         if (error) return fail(error.message, 500);
         return json({ ok: true, area, areaName: AREAS[area] });
@@ -220,9 +270,7 @@ Deno.serve(async (req: Request) => {
         const c = checkNewKey(body.newKey);
         if (c.error) return fail(c.error);
         const { error } = await db.from('admin_auth').upsert({
-          id: 1,
-          key_hash: await hmacHex(c.key!),
-          updated_at: new Date().toISOString(),
+          id: 1, key_hash: await hmacHex(c.key!), updated_at: new Date().toISOString(),
         });
         if (error) return fail(error.message, 500);
         return json({ ok: true });
@@ -233,11 +281,8 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  /* ============ 普通区域接口 ============ */
-  /* 自检接口：不带任何密钥也能调，用来确认部署的是不是最新代码 */
-  if (action === 'ping') {
-    return json({ ok: true, version: 2, service: 'photo-wall' });
-  }
+  /* ============ 自检 ============ */
+  if (action === 'ping') return json({ ok: true, version: 3, service: 'photo-wall' });
 
   if (!AREAS[area]) return fail('未知区域');
   const key = req.headers.get('x-area-key') ?? String(body.key ?? '');
@@ -255,9 +300,20 @@ Deno.serve(async (req: Request) => {
     case 'list': {
       const { data, error } = await db
         .from('photos').select(PHOTO_COLS).eq('area', area)
-        .order('created_at', { ascending: false }).limit(500);
+        .order('created_at', { ascending: false }).limit(300);
       if (error) return fail(error.message, 500);
-      return json({ ok: true, photos: await withUrls(data ?? []) });
+      const rows = data ?? [];
+      const items = await withUrls(rows);
+      const st = await socialStats(items.map((p) => String(p.id)), clientId);
+      return json({
+        ok: true,
+        photos: items.map((p) => ({
+          ...p,
+          likes: st.likes.get(String(p.id)) ?? 0,
+          comments: st.comments.get(String(p.id)) ?? 0,
+          liked: st.mine.has(String(p.id)),
+        })),
+      });
     }
 
     case 'sign-upload': {
@@ -272,29 +328,75 @@ Deno.serve(async (req: Request) => {
       if (!path.startsWith(area + '/') || path.includes('..') || path.length > 200) {
         return fail('非法路径');
       }
-      const author = String(body.author ?? '').trim().slice(0, MAX_AUTHOR) || '匿名';
-      const caption = String(body.caption ?? '').trim().slice(0, MAX_CAPTION);
+      const author = clip(body.author, MAX_AUTHOR) || '匿名';
+      const caption = clip(body.caption, MAX_CAPTION);
       const { error } = await db.from('photos').insert({
-        area,
-        storage_path: path,
-        author,
-        caption,
-        width: intOrNull(body.width),
-        height: intOrNull(body.height),
+        area, kind: 'photo', storage_path: path, author, caption,
+        width: intOrNull(body.width), height: intOrNull(body.height),
       });
       if (error) return fail(error.message, 500);
       return json({ ok: true });
     }
 
+    case 'post-text': {
+      const text = clip(body.body, MAX_BODY);
+      if (!text) return fail('写点什么再发吧');
+      const author = clip(body.author, MAX_AUTHOR) || '匿名';
+      const { data, error } = await db.from('photos').insert({
+        area, kind: 'text', storage_path: null, author, caption: '', body: text,
+      }).select('id').maybeSingle();
+      if (error) return fail(error.message, 500);
+      return json({ ok: true, id: data?.id ?? null });
+    }
+
+    case 'like': {
+      const id = String(body.id ?? '');
+      const like = body.like !== false;
+      if (!uuidOk(id) || !clientId) return fail('参数错误');
+      const { error } = like
+        ? await db.from('likes').upsert(
+            { post_id: id, client_id: clientId },
+            { onConflict: 'post_id,client_id' },
+          )
+        : await db.from('likes').delete().eq('post_id', id).eq('client_id', clientId);
+      if (error) return fail(error.message, 500);
+      const { count } = await db
+        .from('likes').select('*', { count: 'exact', head: true }).eq('post_id', id);
+      return json({ ok: true, likes: count ?? 0, liked: like });
+    }
+
+    case 'comments': {
+      const id = String(body.id ?? '');
+      if (!uuidOk(id)) return fail('参数错误');
+      const { data, error } = await db.from('comments')
+        .select('id,author,body,created_at')
+        .eq('post_id', id).order('created_at', { ascending: true }).limit(300);
+      if (error) return fail(error.message, 500);
+      return json({ ok: true, comments: data ?? [] });
+    }
+
+    case 'comment': {
+      const id = String(body.id ?? '');
+      if (!uuidOk(id)) return fail('参数错误');
+      const text = clip(body.body, MAX_COMMENT);
+      if (!text) return fail('回复不能为空');
+      const author = clip(body.author, MAX_AUTHOR) || '匿名';
+      const { data, error } = await db.from('comments')
+        .insert({ post_id: id, author, body: text })
+        .select('id,author,body,created_at').maybeSingle();
+      if (error) return fail(error.message, 500);
+      return json({ ok: true, comment: data });
+    }
+
     case 'delete': {
       const id = String(body.id ?? '');
-      if (!/^[0-9a-f-]{36}$/i.test(id)) return fail('参数错误');
+      if (!uuidOk(id)) return fail('参数错误');
       const { data, error } = await db
         .from('photos').delete().eq('id', id).eq('area', area).select('storage_path');
       if (error) return fail('删除失败：' + error.message, 500);
       const row = (data ?? [])[0];
-      if (!row) return fail('这张照片已经不在了（可能已被删除）', 404);
-      await db.storage.from(BUCKET).remove([row.storage_path]);
+      if (!row) return fail('这条已经不在了（可能已被删除）', 404);
+      if (row.storage_path) await db.storage.from(BUCKET).remove([String(row.storage_path)]);
       return json({ ok: true });
     }
 
