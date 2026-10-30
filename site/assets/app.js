@@ -7,6 +7,7 @@
   var FN_URL = BASE + (CFG.FUNCTION_PATH || '/functions/v1/api');
   var AREAS = { grade7: '七年级', primary: '小学' };
   var MAX_MB = 20;
+  var BUCKET = CFG.PHOTO_BUCKET || 'photos';
 
   var state = {
     area: localStorage.getItem('pw.area') === 'primary' ? 'primary' : 'grade7',
@@ -103,11 +104,12 @@
   /* 直传 Storage 的签名地址（带进度） */
   function putSigned(path, token, blob, onProgress) {
     return new Promise(function (resolve, reject) {
-      var url = BASE + '/storage/v1/object/upload/sign/' + path.split('/').map(encodeURIComponent).join('/') +
-        '?token=' + encodeURIComponent(token);
+      var full = (BUCKET + '/' + path).split('/').map(encodeURIComponent).join('/');
+      var url = BASE + '/storage/v1/object/upload/sign/' + full + '?token=' + encodeURIComponent(token);
       var xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
       xhr.setRequestHeader('x-upsert', 'true');
+      xhr.setRequestHeader('Content-Type', blob.type || 'image/jpeg');
       if (CFG.SUPABASE_ANON_KEY) {
         xhr.setRequestHeader('apikey', CFG.SUPABASE_ANON_KEY);
         xhr.setRequestHeader('Authorization', 'Bearer ' + CFG.SUPABASE_ANON_KEY);
