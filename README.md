@@ -16,6 +16,7 @@ photo-wall/
 │  └─ config.toml
 ├─ tools/
 │  ├─ make-sql.sh                   生成带真实哈希的 SQL（推荐）
+│  ├─ check.sh                      后端自检（ping / 管理员 / 区域）
 │  └─ hash-key.sh                   只算单个密钥的哈希
 ├─ .github/workflows/supabase-functions.yml  push 自动部署函数
 ├─ netlify.toml                     publish = "site"
@@ -73,6 +74,12 @@ Secrets 加 `AREA_PEPPER`（`make-sql.sh` 打印的那串）和 `PHOTO_BUCKET=ph
 
 以后只要 push 改动到 `supabase/functions/`，Actions 会自动部署，并顺手调一次
 `{"action":"ping"}` 自检。也可以到 Actions 页面点 **Run workflow** 手动跑。
+
+**配好之后跑一句自检**（会告诉你函数版本对不对、密钥是不是对不上）：
+
+```sh
+sh tools/check.sh https://<项目ref>.supabase.co 0124
+```
 
 ### 5. 前端指向你的项目
 
