@@ -9,7 +9,7 @@ const CORS: Record<string, string> = {
   'Access-Control-Max-Age': '86400',
 };
 
-const AREAS: Record<string, string> = { grade7: '七年级', primary: '小学' };
+const AREAS: Record<string, string> = { grade7: '小学2区', primary: '小学' };
 const BUCKET = Deno.env.get('PHOTO_BUCKET') ?? 'photos';
 const SIGNED_TTL = 60 * 60 * 6;
 const MAX_AUTHOR = 16;

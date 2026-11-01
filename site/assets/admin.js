@@ -5,7 +5,7 @@
   var CFG = window.APP_CONFIG || {};
   var BASE = String(CFG.SUPABASE_URL || '').replace(/\/+$/, '');
   var FN_URL = BASE + (CFG.FUNCTION_PATH || '/functions/v1/api');
-  var AREAS = { grade7: '七年级', primary: '小学' };
+  var AREAS = { grade7: '小学2区', primary: '小学' };
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {
@@ -76,11 +76,15 @@
       headers.apikey = CFG.SUPABASE_ANON_KEY;
       headers.Authorization = 'Bearer ' + CFG.SUPABASE_ANON_KEY;
     }
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 20000);
     return fetch(FN_URL, {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify(body)
-    }).then(function (r) {
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    }).then(function (r) { clearTimeout(timer); return r; }, function (e) { clearTimeout(timer); throw e; })
+    .then(function (r) {
       return r.text().then(function (t) {
         var j;
         try { j = JSON.parse(t); } catch (e) {
@@ -90,7 +94,9 @@
         return j;
       });
     }).catch(function (e) {
-      return { ok: false, error: '网络错误：' + (e && e.message ? e.message : e), _status: 0 };
+      var msg = (e && e.name === 'AbortError') ? '请求超时，请检查网络后重试'
+        : '网络错误：' + (e && e.message ? e.message : e);
+      return { ok: false, error: msg, _status: 0 };
     });
   }
 
